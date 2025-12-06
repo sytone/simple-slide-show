@@ -5,34 +5,33 @@
 
 .DESCRIPTION
     This script builds the application for multiple platforms (Windows, Linux, macOS),
-    creates ZIP archives, and optionally bumps the version number in the project file.
+    creates ZIP archives, and uses Versionize for version management and changelog generation.
 
-.PARAMETER Version
-    Optional version number to set (e.g., "1.2.3"). If not specified, uses current version from .csproj
+.PARAMETER SkipTag
+    Skip creating git tag after version bump (useful for testing)
 
-.PARAMETER BumpVersion
-    Automatically increment the version. Valid values: major, minor, patch
+.PARAMETER PreRelease
+    Create a pre-release version (e.g., alpha, beta, rc)
 
 .PARAMETER OutputDir
     Directory where published artifacts will be created. Default: ./publish
 
 .EXAMPLE
     .\publish.ps1
-    # Publishes all platforms with current version
+    # Uses Versionize to determine version bump based on conventional commits and publishes
 
 .EXAMPLE
-    .\publish.ps1 -Version "1.2.0"
-    # Sets version to 1.2.0 and publishes
+    .\publish.ps1 -SkipTag
+    # Bumps version and publishes without creating git tag
 
 .EXAMPLE
-    .\publish.ps1 -BumpVersion patch
-    # Increments patch version (e.g., 1.0.0 -> 1.0.1) and publishes
+    .\publish.ps1 -PreRelease alpha
+    # Creates a pre-release version with alpha label
 #>
 
 param(
-    [string]$Version,
-    [ValidateSet('major', 'minor', 'patch')]
-    [string]$BumpVersion,
+    [switch]$SkipTag,
+    [string]$PreRelease,
     [string]$OutputDir = "publish"
 )
 
@@ -40,6 +39,56 @@ $ErrorActionPreference = "Stop"
 
 $projectFile = "src/simple-slide-show.csproj"
 $projectDir = "src"
+
+# Check if Versionize is installed
+$versionizeInstalled = $null -ne (Get-Command versionize -ErrorAction SilentlyContinue)
+if (-not $versionizeInstalled) {
+    Write-Host "⚠ Versionize not found. Installing globally..." -ForegroundColor Yellow
+    dotnet tool install --global Versionize
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to install Versionize"
+        exit 1
+    }
+    Write-Host "✓ Versionize installed" -ForegroundColor Green
+}
+
+# Run Versionize to bump version and update changelog
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "Running Versionize for Version & Changelog" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
+
+$versionizeArgs = @()
+if ($SkipTag) {
+    $versionizeArgs += "--skip-tag"
+}
+if ($PreRelease) {
+    $versionizeArgs += "--pre-release"
+    $versionizeArgs += $PreRelease
+}
+
+# Dry run first to see what would happen
+Write-Host "Analyzing commits..." -ForegroundColor Yellow
+$dryRunArgs = $versionizeArgs + @("--dry-run", "--skip-commit")
+& versionize @dryRunArgs
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "No changes detected or Versionize dry-run failed. Proceeding with current version."
+    $skipVersionize = $true
+} else {
+    $skipVersionize = $false
+}
+
+# Actually run versionize if there are changes
+if (-not $skipVersionize) {
+    Write-Host "`nApplying version bump and updating CHANGELOG.md..." -ForegroundColor Yellow
+    & versionize @versionizeArgs
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Versionize failed"
+        exit 1
+    }
+    Write-Host "✓ Version bumped and CHANGELOG.md updated" -ForegroundColor Green
+}
 
 # Read current version from .csproj
 function Get-CurrentVersion {
@@ -51,74 +100,10 @@ function Get-CurrentVersion {
     return $currentVersion
 }
 
-# Bump version based on type
-function Get-BumpedVersion {
-    param(
-        [string]$current,
-        [string]$bumpType
-    )
-    
-    $parts = $current -split '\.'
-    $major = [int]$parts[0]
-    $minor = [int]$parts[1]
-    $patch = [int]$parts[2]
-    
-    switch ($bumpType) {
-        'major' { 
-            $major++
-            $minor = 0
-            $patch = 0
-        }
-        'minor' { 
-            $minor++
-            $patch = 0
-        }
-        'patch' { 
-            $patch++
-        }
-    }
-    
-    return "$major.$minor.$patch"
-}
-
-# Update version in .csproj
-function Set-ProjectVersion {
-    param([string]$newVersion)
-    
-    [xml]$csproj = Get-Content $projectFile
-    $propertyGroup = $csproj.Project.PropertyGroup | Where-Object { $_.Version }
-    
-    if (-not $propertyGroup) {
-        $propertyGroup = $csproj.Project.PropertyGroup[0]
-        $versionNode = $csproj.CreateElement("Version")
-        $versionNode.InnerText = $newVersion
-        $propertyGroup.AppendChild($versionNode) | Out-Null
-    } else {
-        $propertyGroup.Version = $newVersion
-    }
-    
-    $propertyGroup.AssemblyVersion = "$newVersion.0"
-    $propertyGroup.FileVersion = "$newVersion.0"
-    
-    $csproj.Save((Resolve-Path $projectFile))
-    Write-Host "✓ Updated version to $newVersion" -ForegroundColor Green
-}
-
 # Determine version to use
 $currentVersion = Get-CurrentVersion
-Write-Host "Current version: $currentVersion" -ForegroundColor Cyan
-
-if ($BumpVersion) {
-    $Version = Get-BumpedVersion -current $currentVersion -bumpType $BumpVersion
-    Write-Host "Bumping $BumpVersion version to: $Version" -ForegroundColor Yellow
-    Set-ProjectVersion -newVersion $Version
-} elseif ($Version) {
-    Write-Host "Setting version to: $Version" -ForegroundColor Yellow
-    Set-ProjectVersion -newVersion $Version
-} else {
-    $Version = $currentVersion
-    Write-Host "Using current version: $Version" -ForegroundColor Yellow
-}
+Write-Host "`nCurrent version: $currentVersion" -ForegroundColor Cyan
+$Version = $currentVersion
 
 # Clean and create output directory
 if (Test-Path $OutputDir) {
@@ -182,3 +167,17 @@ Get-ChildItem $OutputDir | ForEach-Object {
     $sizeMB = [math]::Round($_.Length / 1MB, 2)
     Write-Host "  - $($_.Name) ($sizeMB MB)" -ForegroundColor Gray
 }
+
+Write-Host "`nPublish process completed successfully!" -ForegroundColor Green
+Write-Host "Version: $Version" -ForegroundColor Cyan
+if (-not $SkipTag) {
+    Write-Host "Git tag: v$Version" -ForegroundColor Cyan
+}
+Write-Host "`nNext steps:" -ForegroundColor Yellow
+Write-Host "  - Review CHANGELOG.md for accuracy" -ForegroundColor Gray
+if ($SkipTag) {
+    Write-Host "  - Tag was skipped. Run 'git push origin v$Version' manually if needed" -ForegroundColor Gray
+} else {
+    Write-Host "  - Version tag has been pushed to origin" -ForegroundColor Gray
+}
+Write-Host "  - Artifacts are ready in $OutputDir/" -ForegroundColor Gray

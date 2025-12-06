@@ -6,46 +6,91 @@ This document describes how to build and publish Simple Slide Show for multiple 
 
 ### Using PowerShell Script (Recommended)
 
-The `publish.ps1` script handles everything:
+The `publish.ps1` script uses **Versionize** to automatically:
+- Determine version bump based on conventional commits
+- Update `CHANGELOG.md` automatically
+- Create git tags
+- Build for all platforms
 
 ```powershell
-# Publish with current version
+# Automatic version bump based on commits + publish
 .\publish.ps1
 
-# Bump patch version (1.0.0 -> 1.0.1) and publish
-.\publish.ps1 -BumpVersion patch
+# Skip creating git tag (for testing)
+.\publish.ps1 -SkipTag
 
-# Bump minor version (1.0.0 -> 1.1.0) and publish
-.\publish.ps1 -BumpVersion minor
-
-# Bump major version (1.0.0 -> 2.0.0) and publish
-.\publish.ps1 -BumpVersion major
-
-# Set specific version and publish
-.\publish.ps1 -Version "2.5.0"
+# Create a pre-release version
+.\publish.ps1 -PreRelease alpha
 
 # Custom output directory
 .\publish.ps1 -OutputDir "releases"
 ```
 
 The script will:
-1. Update version numbers in `.csproj` if needed
-2. Build for all platforms (Windows, Linux, macOS x64/ARM64)
-3. Create ZIP archives in the `publish/` directory
-4. Display file sizes and locations
+1. Analyze your commits since last version
+2. Determine version bump (major/minor/patch) automatically
+3. Update version numbers in `.csproj`
+4. Update `CHANGELOG.md` with commit messages
+5. Create a git commit and tag (unless `-SkipTag` is used)
+6. Build for all platforms (Windows, Linux, macOS x64/ARM64)
+7. Create ZIP archives in the `publish/` directory
+8. Display file sizes and locations
+
+## Conventional Commits
+
+Versionize uses **Conventional Commits** to determine version bumps:
+
+```bash
+# Patch version bump (1.0.0 -> 1.0.1)
+fix: correct image loading bug
+chore: update dependencies
+
+# Minor version bump (1.0.0 -> 1.1.0)
+feat: add new pixelate transition
+feat: add port configuration
+
+# Major version bump (1.0.0 -> 2.0.0)
+feat!: redesign transition architecture
+feat: major API redesign
+
+BREAKING CHANGE: removed old transition API
+```
+
+### Commit Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:**
+- `feat`: New feature (minor version bump)
+- `fix`: Bug fix (patch version bump)
+- `chore`: Maintenance, dependencies, etc. (patch version bump)
+- `docs`: Documentation only (no version bump)
+- `style`: Code style changes (no version bump)
+- `refactor`: Code refactoring (no version bump)
+- `perf`: Performance improvements (patch version bump)
+- `test`: Adding tests (no version bump)
+
+**Breaking Changes:**
+Add `!` after type or include `BREAKING CHANGE:` in footer for major version bump
 
 ## GitHub Actions Automated Releases
 
 ### Automatic Release on Tag Push
 
-The GitHub Action automatically builds and creates releases when you push a version tag:
+The GitHub Action automatically builds and creates releases when you push a version tag.
+
+When you run `publish.ps1`, it automatically creates and pushes the tag for you.
+
+If you need to manually create a release:
 
 ```bash
-# Commit your changes
-git add .
-git commit -m "Release version 1.2.0"
-
-# Create and push a version tag
+# Versionize handles this automatically, but if needed:
 git tag v1.2.0
 git push origin v1.2.0
 ```
