@@ -53,9 +53,9 @@ if (-not $versionizeInstalled) {
 }
 
 # Run Versionize to bump version and update changelog
-Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "`n=============================================" -ForegroundColor Cyan
 Write-Host "Running Versionize for Version & Changelog" -ForegroundColor Cyan
-Write-Host "========================================`n" -ForegroundColor Cyan
+Write-Host "=============================================`n" -ForegroundColor Cyan
 
 $versionizeArgs = @()
 if ($SkipTag) {
