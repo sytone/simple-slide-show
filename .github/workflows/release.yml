@@ -1,0 +1,141 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required for creating releases
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+      
+      - name: Update project version
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+          sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|g" src/simple-slide-show.csproj
+          sed -i "s|<AssemblyVersion>.*</AssemblyVersion>|<AssemblyVersion>$VERSION.0</AssemblyVersion>|g" src/simple-slide-show.csproj
+          sed -i "s|<FileVersion>.*</FileVersion>|<FileVersion>$VERSION.0</FileVersion>|g" src/simple-slide-show.csproj
+      
+      - name: Restore dependencies
+        run: dotnet restore src/simple-slide-show.csproj
+      
+      - name: Build Windows x64
+        run: |
+          dotnet publish src/simple-slide-show.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o ./publish/win-x64
+      
+      - name: Build Linux x64
+        run: |
+          dotnet publish src/simple-slide-show.csproj \
+            -c Release \
+            -r linux-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o ./publish/linux-x64
+      
+      - name: Build macOS x64
+        run: |
+          dotnet publish src/simple-slide-show.csproj \
+            -c Release \
+            -r osx-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o ./publish/osx-x64
+      
+      - name: Build macOS ARM64
+        run: |
+          dotnet publish src/simple-slide-show.csproj \
+            -c Release \
+            -r osx-arm64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o ./publish/osx-arm64
+      
+      - name: Create ZIP archives
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+          mkdir -p ./artifacts
+          
+          cd publish/win-x64 && zip -r ../../artifacts/simple-slide-show-v${VERSION}-Windows-x64.zip . && cd ../..
+          cd publish/linux-x64 && zip -r ../../artifacts/simple-slide-show-v${VERSION}-Linux-x64.zip . && cd ../..
+          cd publish/osx-x64 && zip -r ../../artifacts/simple-slide-show-v${VERSION}-macOS-x64.zip . && cd ../..
+          cd publish/osx-arm64 && zip -r ../../artifacts/simple-slide-show-v${VERSION}-macOS-ARM64.zip . && cd ../..
+      
+      - name: Generate SHA256 checksums
+        run: |
+          cd artifacts
+          sha256sum *.zip > checksums.txt
+          cat checksums.txt
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            artifacts/*.zip
+            artifacts/checksums.txt
+          body: |
+            ## Simple Slide Show v${{ steps.get_version.outputs.VERSION }}
+            
+            ### Downloads
+            
+            Download the appropriate version for your platform:
+            
+            - **Windows (x64)**: `simple-slide-show-v${{ steps.get_version.outputs.VERSION }}-Windows-x64.zip`
+            - **Linux (x64)**: `simple-slide-show-v${{ steps.get_version.outputs.VERSION }}-Linux-x64.zip`
+            - **macOS (Intel)**: `simple-slide-show-v${{ steps.get_version.outputs.VERSION }}-macOS-x64.zip`
+            - **macOS (Apple Silicon)**: `simple-slide-show-v${{ steps.get_version.outputs.VERSION }}-macOS-ARM64.zip`
+            
+            ### Installation
+            
+            1. Download and extract the ZIP file for your platform
+            2. Edit `appsettings.json` to configure your image folder and settings
+            3. Run the executable:
+               - Windows: `simple-slide-show.exe`
+               - Linux/macOS: `./simple-slide-show`
+            4. Open your browser to the configured URL (default: http://localhost:5000)
+            
+            ### Checksum Verification
+            
+            See `checksums.txt` for SHA256 hashes of all release files.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Slide Show</title>
+    <script src="transitions.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .controls {
+            background-color: #2a2a2a;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            margin-left: auto;
+            font-size: 14px;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .slideshow-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        .slideshow-image {
+            position: absolute;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            inset: 0;
+            margin: auto;
+        }
+
+        .image-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .image-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .image-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .no-images {
+            text-align: center;
+            color: #999;
+        }
+
+        .no-images-title {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .no-images-text {
+            font-size: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-label">Total Images</span>
+                <span class="stat-value" id="totalImages">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Current Image</span>
+                <span class="stat-value" id="currentImageNum">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Mode</span>
+                <span class="stat-value" id="modeValue">--</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Interval (sec)</span>
+                <span class="stat-value" id="intervalValue">--</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Transitions</span>
+                <span class="stat-value" id="transitionsValue">--</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="slideshow-container">
+        <img id="slideShowImageA" class="slideshow-image" style="z-index: 1;" />
+        <img id="slideShowImageB" class="slideshow-image" style="z-index: 2;" />
+        <div class="image-info" id="imageInfo" style="display:none;">
+            <div class="image-name" id="imageName"></div>
+            <div class="image-stats">
+                <span id="displayCount">Display Count: 0</span>
+                <span id="dateAdded">Added: --</span>
+            </div>
+        </div>
+        <div class="no-images" id="noImages" style="display:none;">
+            <div class="no-images-title">No Images Found</div>
+            <div class="no-images-text">Add JPG images to your SlideShow folder to get started</div>
+        </div>
+    </div>
+
+    <script>
+        const imageA = document.getElementById('slideShowImageA');
+        const imageB = document.getElementById('slideShowImageB');
+        const totalImagesSpan = document.getElementById('totalImages');
+        const currentImageNumSpan = document.getElementById('currentImageNum');
+        const modeValue = document.getElementById('modeValue');
+        const intervalValue = document.getElementById('intervalValue');
+        const transitionsValue = document.getElementById('transitionsValue');
+        const imageInfo = document.getElementById('imageInfo');
+        const noImages = document.getElementById('noImages');
+
+        let currentImageCount = 0;
+        let slideShowInterval = null;
+        let allImages = [];
+        let slideShowConfig = {
+            randomMode: true,
+            intervalSeconds: 3,
+            showControls: true,
+            refreshIntervalSeconds: 5,
+            transitions: []
+        };
+        let transitionRegistry = {};
+        let currentLayer = imageA;
+        let nextLayer = imageB;
+        let nextImageData = null;
+        let isFirstImage = true;
+        
+        console.log('[Main] Initial transitionRegistry:', transitionRegistry);
+        console.log('[Main] window.transitionRegistry:', window.transitionRegistry);
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
+        }
+
+        async function loadAndDisplayNextImage() {
+            try {
+                console.log('[Main] loadAndDisplayNextImage called');
+                const response = await fetch(`/api/slideshow/next`);
+
+                if (response.ok) {
+                    const imageData = await response.json();
+                    console.log('[Main] Fetched image data:', imageData.fileName);
+                    
+                    if (isFirstImage) {
+                        console.log('[Main] Loading first image into currentLayer');
+                        // Load first image into current layer
+                        await loadImageIntoLayer(currentLayer, imageData);
+                        currentImageCount++;
+                        currentImageNumSpan.textContent = currentImageCount;
+                        setImageInfo(imageData);
+                        currentLayer.style.opacity = '1';
+                        isFirstImage = false;
+                        console.log('[Main] First image loaded and displayed');
+                        
+                        // Pre-load the second image
+                        console.log('[Main] Pre-loading second image into nextLayer');
+                        const nextResponse = await fetch(`/api/slideshow/next`);
+                        if (nextResponse.ok) {
+                            nextImageData = await nextResponse.json();
+                            console.log('[Main] Pre-loading next image:', nextImageData.fileName);
+                            await loadImageIntoLayer(nextLayer, nextImageData);
+                            console.log('[Main] Second image pre-loaded and ready');
+                        }
+                    } else {
+                        console.log('[Main] Both images loaded, running transition');
+                        // We have both images loaded, run transition
+                        runTransition();
+                        
+                        // After transition, fetch the next image for the layer that's now hidden
+                        console.log('[Main] Fetching next image for hidden layer');
+                        const nextResponse = await fetch(`/api/slideshow/next`);
+                        if (nextResponse.ok) {
+                            nextImageData = await nextResponse.json();
+                            console.log('[Main] Loading next image into hidden layer:', nextImageData.fileName);
+                            await loadImageIntoLayer(nextLayer, nextImageData);
+                            console.log('[Main] Next image loaded and ready');
+                        }
+                    }
+                } else {
+                    console.warn('[Main] No images available from API');
+                    showNoImages();
+                }
+            } catch (error) {
+                console.error('[Main] Error loading image:', error);
+                showNoImages();
+            }
+        }
+
+        function loadImageIntoLayer(layer, imageData) {
+            return new Promise((resolve) => {
+                const url = `/api/slideshow/image/${imageData.fileName}`;
+                const layerName = layer === imageA ? 'A' : 'B';
+                console.log(`[Main] Loading image into layer ${layerName}:`, imageData.fileName);
+                layer.onload = () => {
+                    console.log(`[Main] Image loaded into layer ${layerName}:`, imageData.fileName);
+                    resolve();
+                };
+                layer.src = url;
+            });
+        }
+
+        function runTransition() {
+            noImages.style.display = 'none';
+            imageInfo.style.display = 'block';
+            
+            console.log('[Main] runTransition - transitionRegistry keys:', Object.keys(transitionRegistry));
+            console.log('[Main] runTransition - window.transitionRegistry keys:', window.transitionRegistry ? Object.keys(window.transitionRegistry) : 'undefined');
+            
+            const transition = selectTransition();
+            console.log('[Main] Running transition:', transition ? transition.name : 'none');
+            
+            if (transition && transitionRegistry[transition.name]) {
+                const currentLayerName = currentLayer === imageA ? 'A' : 'B';
+                const nextLayerName = nextLayer === imageA ? 'A' : 'B';
+                console.log(`[Main] Transition from layer ${currentLayerName} to layer ${nextLayerName}`);
+                console.log('[Main] Calling transition with config:', JSON.stringify(transition.config));
+                
+                transitionRegistry[transition.name](currentLayer, nextLayer, transition.config, () => {
+                    console.log('[Main] Transition complete callback');
+                    // Transition complete
+                    currentImageCount++;
+                    currentImageNumSpan.textContent = currentImageCount;
+                    setImageInfo(nextImageData);
+                    
+                    // Swap layers: next becomes current
+                    [currentLayer, nextLayer] = [nextLayer, currentLayer];
+                    const newCurrentName = currentLayer === imageA ? 'A' : 'B';
+                    const newNextName = nextLayer === imageA ? 'A' : 'B';
+                    console.log(`[Main] Layers swapped - current: ${newCurrentName}, next: ${newNextName}`);
+                });
+            } else {
+                console.log('[Main] No transition, instant swap');
+                // No transition, just swap
+                currentLayer.style.opacity = '0';
+                nextLayer.style.opacity = '1';
+                currentImageCount++;
+                currentImageNumSpan.textContent = currentImageCount;
+                setImageInfo(nextImageData);
+                [currentLayer, nextLayer] = [nextLayer, currentLayer];
+                console.log('[Main] Instant swap complete');
+            }
+            
+            updateImageList();
+        }
+
+        function selectTransition() {
+            if (!slideShowConfig.transitions || slideShowConfig.transitions.length === 0) {
+                console.log('[Main] No transitions configured');
+                return null;
+            }
+            const randomIndex = Math.floor(Math.random() * slideShowConfig.transitions.length);
+            const selected = slideShowConfig.transitions[randomIndex];
+            console.log('[Main] Selected transition:', selected.name, 'with config:', selected.config);
+            return selected;
+        }
+
+        function showNoImages() {
+            noImages.style.display = 'flex';
+            noImages.style.flexDirection = 'column';
+            noImages.style.alignItems = 'center';
+            noImages.style.justifyContent = 'center';
+            imageInfo.style.display = 'none';
+            imageA.src = '';
+            imageB.src = '';
+        }
+
+        async function updateImageList() {
+            try {
+                const response = await fetch('/api/slideshow/images');
+                if (response.ok) {
+                    allImages = await response.json();
+                    totalImagesSpan.textContent = allImages.length;
+                }
+            } catch (error) {
+                console.error('Error loading image list:', error);
+            }
+        }
+
+        function startSlideShow() {
+            stopSlideShow();
+            const intervalSeconds = slideShowConfig.intervalSeconds || 3;
+            loadAndDisplayNextImage();
+            slideShowInterval = setInterval(loadAndDisplayNextImage, intervalSeconds * 1000);
+        }
+
+        function stopSlideShow() {
+            if (slideShowInterval) {
+                clearInterval(slideShowInterval);
+                slideShowInterval = null;
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/slideshow/config');
+                if (response.ok) {
+                    const rawConfig = await response.json();
+                    const newConfig = normalizeConfig(rawConfig);
+                    const intervalChanged = newConfig.intervalSeconds !== slideShowConfig.intervalSeconds;
+                    const modeChanged = newConfig.randomMode !== slideShowConfig.randomMode;
+                    slideShowConfig = newConfig;
+                    
+                    // Show/hide controls based on config
+                    const controlsDiv = document.querySelector('.controls');
+                    if (controlsDiv) {
+                        controlsDiv.style.display = slideShowConfig.showControls ? 'flex' : 'none';
+                    }
+                    
+                    modeValue.textContent = slideShowConfig.randomMode ? 'Random (weighted)' : 'Sequential';
+                    intervalValue.textContent = slideShowConfig.intervalSeconds;
+                    transitionsValue.textContent = slideShowConfig.transitions && slideShowConfig.transitions.length > 0 
+                        ? slideShowConfig.transitions.map(t => t.name).join(', ') 
+                        : 'None';
+                    if (intervalChanged || modeChanged) {
+                        startSlideShow();
+                    }
+                }
+            } catch (err) {
+                console.error('Error loading config:', err);
+            }
+        }
+
+        function normalizeConfig(raw) {
+            const pick = (camel, pascal, fallback) => {
+                if (raw[camel] !== undefined) return raw[camel];
+                if (raw[pascal] !== undefined) return raw[pascal];
+                return fallback;
+            };
+
+            // Normalize transitions: convert strings to objects
+            const rawTransitions = pick('transitions', 'Transitions', slideShowConfig.transitions ?? []);
+            console.log('[Main] Raw transitions from config:', JSON.stringify(rawTransitions));
+            const transitions = rawTransitions.map(t => {
+                if (typeof t === 'string') {
+                    // Simple string format: convert to object
+                    return { name: t, config: {} };
+                } else if (t && typeof t === 'object') {
+                    // Object format: normalize property names
+                    const name = t.name || t.Name;
+                    const config = { ...t };
+                    delete config.name;
+                    delete config.Name;
+                    const normalized = { name, config };
+                    console.log('[Main] Normalized transition:', JSON.stringify(normalized));
+                    return normalized;
+                }
+                return null;
+            }).filter(t => t && t.name);
+
+            return {
+                randomMode: pick('randomMode', 'RandomMode', slideShowConfig.randomMode ?? true),
+                intervalSeconds: pick('intervalSeconds', 'IntervalSeconds', slideShowConfig.intervalSeconds ?? 3),
+                showControls: pick('showControls', 'ShowControls', slideShowConfig.showControls ?? true),
+                refreshIntervalSeconds: pick('refreshIntervalSeconds', 'RefreshIntervalSeconds', slideShowConfig.refreshIntervalSeconds ?? 5),
+                transitions: transitions
+            };
+        }
+
+        async function initialize() {
+            console.log('[Main] initialize() called');
+            console.log('[Main] Checking window.transitionRegistry:', window.transitionRegistry);
+            
+            // Sync local registry with window registry
+            if (window.transitionRegistry) {
+                transitionRegistry = window.transitionRegistry;
+                console.log('[Main] Synced transitionRegistry from window. Keys:', Object.keys(transitionRegistry));
+            } else {
+                console.warn('[Main] window.transitionRegistry is not defined!');
+            }
+            
+            await loadConfig();
+            await updateImageList();
+            startSlideShow();
+            setInterval(updateImageList, slideShowConfig.refreshIntervalSeconds * 1000);
+            setInterval(loadConfig, slideShowConfig.refreshIntervalSeconds * 1000);
+        }
+
+        function setImageInfo(imageData) {
+            const fileName = imageData.fileName;
+            document.getElementById('imageName').textContent = fileName;
+            document.getElementById('displayCount').textContent = `Display Count: ${imageData.displayCount}`;
+            document.getElementById('dateAdded').textContent = `Added: ${formatDate(imageData.dateAdded)}`;
+        }
+
+        // Initial load
+        initialize();
+    </script>
+</body>
+</html>

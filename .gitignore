@@ -1,0 +1,8 @@
+*.db
+.env
+src/bin/*
+src/obj/*
+src/ExamplePictures/*
+publish/
+artifacts/
+*.zip
