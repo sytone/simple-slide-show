@@ -180,4 +180,6 @@ if ($SkipTag) {
 } else {
     Write-Host "  - Version tag has been pushed to origin" -ForegroundColor Gray
 }
+
+Write-Host "  - Run: git push --follow-tags origin main" -ForegroundColor Green
 Write-Host "  - Artifacts are ready in $OutputDir/" -ForegroundColor Gray
