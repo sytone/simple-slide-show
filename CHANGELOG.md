@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+<a name="1.1.1"></a>
+## [1.1.1](https://www.github.com/sytone/simple-slide-show/releases/tag/v1.1.1) (2025-12-05)
+
+### Bug Fixes
+
+* updated publish header ([929d546](https://www.github.com/sytone/simple-slide-show/commit/929d546215823fa409d23c9d4ad5141ac884e30e))
+
 <a name="1.1.0"></a>
 ## [1.1.0](https://www.github.com/sytone/simple-slide-show/releases/tag/v1.1.0) (2025-12-05)
 
