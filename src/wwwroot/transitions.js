@@ -79,4 +79,74 @@ Transitions.register('fade', function(currentImg, nextImg, config, onComplete) {
 
 console.log('[Transitions.js] Fade transition registered. Registry keys:', window.transitionRegistry ? Object.keys(window.transitionRegistry) : 'undefined');
 
+/// <summary>
+/// Pixelate: Pixelated fade effect using CSS filter animation
+/// Config options:
+///   - Duration: transition duration in seconds (default: 1.0)
+///   - MaxPixelSize: maximum pixel size at peak of transition (default: 20)
+/// </summary>
+Transitions.register('pixelate', function(currentImg, nextImg, config, onComplete) {
+    console.log('[Transition:pixelate] Received config:', JSON.stringify(config));
+    const duration = config.Duration || config.duration || 1.0;
+    const maxPixelSize = config.MaxPixelSize || config.maxPixelSize || 20;
+    const durationMs = duration * 1000;
+    const halfDuration = durationMs / 2;
+    
+    console.log('[Transition:pixelate] Starting pixelate transition with duration:', duration, 'maxPixelSize:', maxPixelSize);
+    
+    // Set initial state
+    currentImg.style.transition = 'none';
+    nextImg.style.transition = 'none';
+    currentImg.style.filter = 'blur(0px)';
+    nextImg.style.filter = 'blur(0px)';
+    nextImg.style.opacity = '0';
+    
+    // Force reflow
+    void nextImg.offsetWidth;
+    
+    // Create pixelation effect using a custom animation approach
+    let startTime = null;
+    
+    function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / durationMs, 1);
+        
+        if (progress < 0.5) {
+            // First half: pixelate and fade out current image
+            const halfProgress = progress * 2; // 0 to 1 over first half
+            const pixelSize = Math.floor(halfProgress * maxPixelSize);
+            const blur = halfProgress * (maxPixelSize / 2);
+            currentImg.style.filter = `blur(${blur}px)`;
+            currentImg.style.opacity = 1 - halfProgress;
+        } else {
+            // Second half: de-pixelate and fade in next image
+            const halfProgress = (progress - 0.5) * 2; // 0 to 1 over second half
+            const pixelSize = Math.floor((1 - halfProgress) * maxPixelSize);
+            const blur = (1 - halfProgress) * (maxPixelSize / 2);
+            currentImg.style.opacity = '0';
+            currentImg.style.filter = 'blur(0px)';
+            nextImg.style.opacity = halfProgress;
+            nextImg.style.filter = `blur(${blur}px)`;
+        }
+        
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            // Clean up
+            currentImg.style.filter = 'none';
+            nextImg.style.filter = 'none';
+            nextImg.style.opacity = '1';
+            console.log('[Transition:pixelate] Pixelate complete, calling onComplete');
+            if (onComplete) {
+                onComplete();
+            }
+        }
+    }
+    
+    requestAnimationFrame(animate);
+});
+
+console.log('[Transitions.js] Pixelate transition registered. Registry keys:', window.transitionRegistry ? Object.keys(window.transitionRegistry) : 'undefined');
+
 console.log('[Transitions.js] Fade transition registered. Registry:', window.transitionRegistry);

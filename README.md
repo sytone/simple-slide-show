@@ -134,6 +134,31 @@ Cross-fades between current and next image with adjustable duration.
 "fade"
 ```
 
+### Pixelate
+
+Creates a pixelated/blur effect that transitions between images by blurring out the current image and then blurring in the next image.
+
+**Configuration Options:**
+- `Duration` (number, default: `1.0`): Total transition duration in seconds
+- `MaxPixelSize` (number, default: `20`): Maximum blur amount at the peak of the transition
+
+**Examples:**
+
+```json
+// Subtle pixelate
+{ "Name": "pixelate", "Duration": 0.8, "MaxPixelSize": 10 }
+
+// Heavy pixelate
+{ "Name": "pixelate", "Duration": 1.5, "MaxPixelSize": 40 }
+
+// Default pixelate
+"pixelate"
+```
+
+**How it works:**
+- First half: Current image blurs out and fades to opacity 0
+- Second half: Next image blurs in from maximum blur to sharp and fades to opacity 1
+
 ## Creating Custom Transitions
 
 Transitions are defined in `wwwroot/transitions.js`. To add a new transition:

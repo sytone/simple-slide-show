@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -109,6 +110,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="controls">
         <div class="stats">
@@ -177,7 +179,7 @@
         let nextLayer = imageB;
         let nextImageData = null;
         let isFirstImage = true;
-        
+
         console.log('[Main] Initial transitionRegistry:', transitionRegistry);
         console.log('[Main] window.transitionRegistry:', window.transitionRegistry);
 
@@ -204,7 +206,7 @@
                 if (response.ok) {
                     const imageData = await response.json();
                     console.log('[Main] Fetched image data:', imageData.fileName);
-                    
+
                     if (isFirstImage) {
                         console.log('[Main] Loading first image into currentLayer');
                         // Load first image into current layer
@@ -215,7 +217,7 @@
                         currentLayer.style.opacity = '1';
                         isFirstImage = false;
                         console.log('[Main] First image loaded and displayed');
-                        
+
                         // Pre-load the second image
                         console.log('[Main] Pre-loading second image into nextLayer');
                         const nextResponse = await fetch(`/api/slideshow/next`);
@@ -229,7 +231,7 @@
                         console.log('[Main] Both images loaded, running transition');
                         // We have both images loaded, run transition
                         runTransition();
-                        
+
                         // After transition, fetch the next image for the layer that's now hidden
                         console.log('[Main] Fetching next image for hidden layer');
                         const nextResponse = await fetch(`/api/slideshow/next`);
@@ -266,26 +268,26 @@
         function runTransition() {
             noImages.style.display = 'none';
             imageInfo.style.display = 'block';
-            
+
             console.log('[Main] runTransition - transitionRegistry keys:', Object.keys(transitionRegistry));
             console.log('[Main] runTransition - window.transitionRegistry keys:', window.transitionRegistry ? Object.keys(window.transitionRegistry) : 'undefined');
-            
+
             const transition = selectTransition();
             console.log('[Main] Running transition:', transition ? transition.name : 'none');
-            
+
             if (transition && transitionRegistry[transition.name]) {
                 const currentLayerName = currentLayer === imageA ? 'A' : 'B';
                 const nextLayerName = nextLayer === imageA ? 'A' : 'B';
                 console.log(`[Main] Transition from layer ${currentLayerName} to layer ${nextLayerName}`);
                 console.log('[Main] Calling transition with config:', JSON.stringify(transition.config));
-                
+
                 transitionRegistry[transition.name](currentLayer, nextLayer, transition.config, () => {
                     console.log('[Main] Transition complete callback');
                     // Transition complete
                     currentImageCount++;
                     currentImageNumSpan.textContent = currentImageCount;
                     setImageInfo(nextImageData);
-                    
+
                     // Swap layers: next becomes current
                     [currentLayer, nextLayer] = [nextLayer, currentLayer];
                     const newCurrentName = currentLayer === imageA ? 'A' : 'B';
@@ -303,7 +305,7 @@
                 [currentLayer, nextLayer] = [nextLayer, currentLayer];
                 console.log('[Main] Instant swap complete');
             }
-            
+
             updateImageList();
         }
 
@@ -363,17 +365,17 @@
                     const intervalChanged = newConfig.intervalSeconds !== slideShowConfig.intervalSeconds;
                     const modeChanged = newConfig.randomMode !== slideShowConfig.randomMode;
                     slideShowConfig = newConfig;
-                    
+
                     // Show/hide controls based on config
                     const controlsDiv = document.querySelector('.controls');
                     if (controlsDiv) {
                         controlsDiv.style.display = slideShowConfig.showControls ? 'flex' : 'none';
                     }
-                    
+
                     modeValue.textContent = slideShowConfig.randomMode ? 'Random (weighted)' : 'Sequential';
                     intervalValue.textContent = slideShowConfig.intervalSeconds;
-                    transitionsValue.textContent = slideShowConfig.transitions && slideShowConfig.transitions.length > 0 
-                        ? slideShowConfig.transitions.map(t => t.name).join(', ') 
+                    transitionsValue.textContent = slideShowConfig.transitions && slideShowConfig.transitions.length > 0
+                        ? slideShowConfig.transitions.map(t => t.name).join(', ')
                         : 'None';
                     if (intervalChanged || modeChanged) {
                         startSlideShow();
@@ -423,7 +425,7 @@
         async function initialize() {
             console.log('[Main] initialize() called');
             console.log('[Main] Checking window.transitionRegistry:', window.transitionRegistry);
-            
+
             // Sync local registry with window registry
             if (window.transitionRegistry) {
                 transitionRegistry = window.transitionRegistry;
@@ -431,7 +433,7 @@
             } else {
                 console.warn('[Main] window.transitionRegistry is not defined!');
             }
-            
+
             await loadConfig();
             await updateImageList();
             startSlideShow();
@@ -450,4 +452,5 @@
         initialize();
     </script>
 </body>
+
 </html>
